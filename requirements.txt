@@ -1,0 +1,29 @@
+# Stock Pattern Detection System Requirements
+
+# Core
+streamlit==1.31.0
+pandas==2.1.4
+numpy==1.26.2
+
+# Data fetching
+yfinance==0.2.36
+
+# Scientific computing
+scipy==1.11.4
+
+# Scheduling
+APScheduler==3.10.4
+pytz==2024.1
+
+# Email (included in Python stdlib but listing for clarity)
+# smtplib - built-in
+# email - built-in
+
+# Database (SQLite is built-in with Python)
+# sqlite3 - built-in
+
+# Logging (built-in)
+# logging - built-in
+
+# Utilities
+python-dateutil==2.8.2
