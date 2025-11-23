@@ -1,5 +1,5 @@
 # Stock Pattern Detection System Requirements
-
+pip install --upgrade pip
 # Core
 streamlit==1.31.0
 pandas==2.1.4
