@@ -38,19 +38,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize session state
-if 'scheduler' not in st.session_state:
-    st.session_state.scheduler = None
-if 'scanning_active' not in st.session_state:
-    st.session_state.scanning_active = False
-if 'stock_list' not in st.session_state:
-    st.session_state.stock_list = []
-if 'last_scan_time' not in st.session_state:
-    st.session_state.last_scan_time = None
-if 'scan_count' not in st.session_state:
-    st.session_state.scan_count = 0
-
-# Initialize components
+# Initialize components first (needed for loading saved config)
 @st.cache_resource
 def init_components():
     """Initialize core components"""
@@ -60,6 +48,32 @@ def init_components():
     return data_manager, pattern_detector, market_utils
 
 data_manager, pattern_detector, market_utils = init_components()
+
+# Initialize session state with persistence
+if 'scheduler' not in st.session_state:
+    st.session_state.scheduler = None
+
+# Load stock list from database (if available)
+if 'stock_list' not in st.session_state:
+    saved_stocks = data_manager.get_stock_list()
+    st.session_state.stock_list = saved_stocks
+    if saved_stocks:
+        logger.info(f"Auto-loaded {len(saved_stocks)} stocks from database")
+
+# Load scanner state from database (but default to False for safety)
+if 'scanning_active' not in st.session_state:
+    # Don't auto-start scanner on refresh, just load stock list
+    st.session_state.scanning_active = False
+    saved_state = data_manager.get_scanner_state()
+    if saved_state:
+        logger.info("Scanner was previously active (not auto-starting for safety)")
+
+if 'last_scan_time' not in st.session_state:
+    st.session_state.last_scan_time = None
+if 'scan_count' not in st.session_state:
+    st.session_state.scan_count = 0
+if 'loaded_from_db' not in st.session_state:
+    st.session_state.loaded_from_db = len(st.session_state.stock_list) > 0
 
 def get_email_system():
     """Get email system with current credentials"""
@@ -233,10 +247,22 @@ with st.sidebar:
             value="\n".join(st.session_state.stock_list) if st.session_state.stock_list else ""
         )
 
+        # Show info if stocks were loaded from database
+        if st.session_state.get('loaded_from_db', False) and st.session_state.stock_list:
+            st.info(f"ℹ️ {len(st.session_state.stock_list)} stocks auto-loaded from database")
+
         if st.button("Load Stocks"):
             stocks = [s.strip().upper() for s in stock_input.split('\n') if s.strip()]
             st.session_state.stock_list = stocks
-            st.success(f"✅ Loaded {len(stocks)} stocks")
+
+            # Save to database for persistence
+            if data_manager.save_stock_list(stocks):
+                st.success(f"✅ Loaded and saved {len(stocks)} stocks to database")
+            else:
+                st.success(f"✅ Loaded {len(stocks)} stocks")
+                st.warning("⚠️ Could not save to database")
+
+            st.session_state.loaded_from_db = False
 
     st.markdown("---")
 
@@ -252,6 +278,8 @@ with st.sidebar:
             else:
                 st.session_state.scanning_active = True
                 setup_scheduler()
+                # Save scanner state to database
+                data_manager.save_scanner_state(True)
                 st.success("✅ Scanner started!")
                 st.rerun()
 
@@ -261,6 +289,8 @@ with st.sidebar:
             if st.session_state.scheduler:
                 st.session_state.scheduler.shutdown()
                 st.session_state.scheduler = None
+            # Save scanner state to database
+            data_manager.save_scanner_state(False)
             st.warning("⏹️ Scanner stopped!")
             st.rerun()
 
