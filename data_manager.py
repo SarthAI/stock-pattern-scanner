@@ -87,6 +87,15 @@ class DataManager:
                 )
             ''')
 
+            # Config table for stock list and settings persistence
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # Create indexes for performance
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_patterns_symbol ON patterns(symbol)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_patterns_state ON patterns(state)')
@@ -492,3 +501,123 @@ class DataManager:
         except Exception as e:
             logger.error(f"Error loading stock list: {e}")
             return []
+
+    # ===== CONFIGURATION PERSISTENCE METHODS =====
+
+    def save_stock_list(self, stocks: List[str]) -> bool:
+        """
+        Save stock list to database for persistence
+
+        Args:
+            stocks: List of stock symbols
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # Convert list to comma-separated string
+            stock_string = ','.join(stocks)
+
+            # Insert or update config
+            cursor.execute('''
+                INSERT OR REPLACE INTO config (key, value, updated_at)
+                VALUES ('stock_list', ?, CURRENT_TIMESTAMP)
+            ''', (stock_string,))
+
+            conn.commit()
+            conn.close()
+
+            logger.info(f"Saved {len(stocks)} stocks to database")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error saving stock list: {e}")
+            return False
+
+    def get_stock_list(self) -> List[str]:
+        """
+        Load stock list from database
+
+        Returns:
+            List of stock symbols, empty list if none saved
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute('SELECT value FROM config WHERE key = "stock_list"')
+            result = cursor.fetchone()
+
+            conn.close()
+
+            if result and result[0]:
+                stocks = [s.strip() for s in result[0].split(',') if s.strip()]
+                logger.info(f"Loaded {len(stocks)} stocks from database")
+                return stocks
+            else:
+                logger.info("No saved stock list found in database")
+                return []
+
+        except Exception as e:
+            logger.error(f"Error loading stock list: {e}")
+            return []
+
+    def save_scanner_state(self, active: bool) -> bool:
+        """
+        Save scanner active state to database
+
+        Args:
+            active: Whether scanner is active
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT OR REPLACE INTO config (key, value, updated_at)
+                VALUES ('scanner_active', ?, CURRENT_TIMESTAMP)
+            ''', ('1' if active else '0',))
+
+            conn.commit()
+            conn.close()
+
+            logger.info(f"Saved scanner state: {'Active' if active else 'Inactive'}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error saving scanner state: {e}")
+            return False
+
+    def get_scanner_state(self) -> bool:
+        """
+        Load scanner active state from database
+
+        Returns:
+            bool: Scanner active state (default False)
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute('SELECT value FROM config WHERE key = "scanner_active"')
+            result = cursor.fetchone()
+
+            conn.close()
+
+            if result and result[0]:
+                active = result[0] == '1'
+                logger.info(f"Loaded scanner state: {'Active' if active else 'Inactive'}")
+                return active
+            else:
+                logger.info("No saved scanner state found, defaulting to inactive")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error loading scanner state: {e}")
+            return False
